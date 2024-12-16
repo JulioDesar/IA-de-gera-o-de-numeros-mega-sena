@@ -3,7 +3,7 @@ import pandas as pd
 import gym
 from gym import spaces
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 import random
 from collections import deque
@@ -31,12 +31,16 @@ class MegaSenaEnv(gym.Env):
         true_numbers = self.numeros[self.current_index + 1]
         reward = 0
 
-        # Sistema de recompensa
+        # Sistema de recompensa ajustado
         for pred, true in zip(action, true_numbers):
             if pred == true:
-                reward += 0.5  # Recompensa por número correto
+                reward += 1  # Recompensa por número correto
             else:
-                reward -= 2  # Penalidade por número errado
+                reward -= 0.1  # Penalidade leve por número errado
+
+        # Penalizar sequências fixas
+        if set(action) == {1, 2, 3, 4, 5, 6}:
+            reward -= 5
 
         done = True  # Cada episódio é um passo único
         self.current_index += 1
@@ -46,6 +50,7 @@ class MegaSenaEnv(gym.Env):
 def criar_modelo(estado_shape, acao_size):
     modelo = Sequential([
         Dense(128, activation='relu', input_shape=estado_shape),
+        Dropout(0.2),  # Regularização
         Dense(128, activation='relu'),
         Dense(acao_size, activation='linear')
     ])
@@ -64,7 +69,7 @@ class DQNAgent:
         self.gamma = 0.99  # Fator de desconto
         self.epsilon = 1.0  # Taxa de exploração inicial
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
+        self.epsilon_decay = 0.999  # Exploração mais longa
         self.batch_size = 32
 
     def lembrar(self, estado, acao, recompensa, proximo_estado, done):
@@ -72,21 +77,12 @@ class DQNAgent:
 
     def agir(self, estado):
         if np.random.rand() <= self.epsilon:
-            return np.random.choice(range(1, 61), size=6, replace=False)  # Gera números únicos aleatórios
+            return np.random.choice(range(1, 61), size=6, replace=False)
         
         # Previsão baseada no modelo
         q_valores = self.model.predict(np.array([estado]), verbose=0)[0]
-        numeros_selecionados = []
-
-        # Selecionar 6 números únicos baseados nos valores Q
-        for _ in range(6):
-            melhor_indice = np.argmax(q_valores) + 1
-            while melhor_indice in numeros_selecionados:
-                q_valores[np.argmax(q_valores)] = -np.inf  # Ignorar número repetido
-                melhor_indice = np.argmax(q_valores) + 1
-            numeros_selecionados.append(melhor_indice)
-
-        return np.array(numeros_selecionados)
+        indices = np.argsort(-q_valores)  # Ordenar índices por valor Q
+        return np.random.choice(indices[:15], size=6, replace=False)  # Escolher dos 15 melhores
 
     def treinar(self):
         if len(self.memory) < self.batch_size:
@@ -115,8 +111,8 @@ estado_shape = env.observation_space.shape
 acao_size = 6  # 6 números na saída
 agente = DQNAgent(estado_shape, acao_size)
 
-# Treinamento
-episodios = 20
+# Treinamento ajustado
+episodios = 100
 
 for episodio in range(episodios):
     estado = env.reset()
@@ -134,6 +130,10 @@ for episodio in range(episodios):
 
     agente.treinar()
     agente.atualizar_target_model()
+
+    # Reinicializar pesos periodicamente
+    if episodio % 10 == 0:
+        agente.model.set_weights(criar_modelo(estado_shape, acao_size).get_weights())
 
     print(f"Episódio {episodio + 1}/{episodios}, Recompensa: {total_recompensa:.2f}, Epsilon: {agente.epsilon:.2f}")
 
