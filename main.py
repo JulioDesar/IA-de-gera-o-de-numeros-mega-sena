@@ -1,4 +1,5 @@
 import os
+import time
 import numpy as np
 import pandas as pd
 import gym
@@ -161,8 +162,11 @@ acao_size = 6
 agente = DQNAgent(estado_shape, acao_size)
 
 # Treinamento
-episodios = 500
+episodios = 200
 total_acertos = 0
+
+# Medir tempo total
+start_time = time.time()
 
 for episodio in range(episodios):
     estado = env.reset()
@@ -181,6 +185,9 @@ for episodio in range(episodios):
         if done:
             acertos = len(info["acertos"])
             total_acertos += acertos
+
+            # Mostrar números apenas se acertos > 2
+            #if acertos > 2:
             numeros_reais = info["numeros_reais"]
             print(f"Episódio {episodio + 1}: Números jogados: {acao}, Números reais: {numeros_reais}, Acertos: {acertos}")
             break
@@ -190,6 +197,10 @@ for episodio in range(episodios):
 
     print(f"Episódio {episodio + 1}/{episodios}, Recompensa: {total_recompensa:.2f}, Epsilon: {agente.epsilon:.2f}")
 
+# Tempo total do treinamento
+end_time = time.time()
+tempo_total_minutos = (end_time - start_time) / 60
+
 # Salvar modelo após o treinamento
 agente.model.save("mega_sena_dqn_model.h5")
 print("Modelo salvo como 'mega_sena_dqn_model.h5'.")
@@ -197,3 +208,4 @@ print("Modelo salvo como 'mega_sena_dqn_model.h5'.")
 # Estatísticas finais
 porcentagem_acertos = (total_acertos / (episodios * 6)) * 100
 print(f"Total de acertos: {total_acertos}/{episodios * 6} ({porcentagem_acertos:.2f}%)")
+print(f"Tempo total de treinamento: {tempo_total_minutos:.2f} minutos.")
